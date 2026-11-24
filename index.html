@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Bouquet for Joy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cormorant+Garamond:ital,wght@1,500&display=swap" rel="stylesheet">
+<style>
+/*
+VOICE: tender, quiet, a gift
+IDEA: a florist's bouquet handed over, turning slowly in the light
+PICTURE: one 3D bouquet of roses, baby's breath and leaves in layered paper, spinning, petals drifting
+COLOUR and TYPE: blush ground, rose reds and pinks, deep wine ink; Great Vibes script + Cormorant italic
+LAYOUT: full-screen scene, greeting on top, one soft line and a hint at the bottom
+*/
+:root{color-scheme:light dark;
+  --bg1:light-dark(#fff0f3,#2b1020);
+  --bg2:light-dark(#f2bccb,#0f060b);
+  --ink:light-dark(#5a0f2c,#fde3ea);
+  --soft:light-dark(#8a3b57,#e9a9bd)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;overflow:hidden;color:var(--ink);
+  background:radial-gradient(120% 90% at 50% 45%,var(--bg1) 0%,var(--bg2) 100%);
+  font:17px/1.5 "Cormorant Garamond",Georgia,serif}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas:active{cursor:grabbing}
+header,footer{position:fixed;left:0;right:0;text-align:center;pointer-events:none;padding:0 20px}
+header{top:clamp(18px,5vh,48px)}
+footer{bottom:clamp(16px,4vh,40px)}
+h1{margin:0;font:400 clamp(52px,11vw,96px)/1 "Great Vibes",cursive;text-wrap:balance;
+  opacity:0;transform:translateY(8px);animation:rise 1.4s .6s ease forwards}
+p{margin:6px 0 0;font-style:italic;font-weight:500;font-size:clamp(17px,2.4vw,21px);
+  opacity:0;animation:rise 1.4s 1.4s ease forwards}
+.hint{font-size:14px;color:var(--soft);animation-delay:2.4s}
+@keyframes rise{to{opacity:1;transform:none}}
+.fallback{position:fixed;inset:0;display:none;place-items:center;font-size:20px;padding:24px;text-align:center}
+@media (prefers-reduced-motion:reduce){h1,p{animation:none;opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="A bouquet of roses for Joy, slowly spinning"></canvas>
+<header><h1>For Joy</h1></header>
+<footer>
+  <p>A little bouquet that never wilts, just like you.</p>
+  <p class="hint">Drag to give it a spin</p>
+</footer>
+<div class="fallback" id="fb">Your browser couldn't draw the bouquet, but it was picked just for you.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+{
+const fb = document.getElementById('fb');
+let ok = typeof THREE !== 'undefined';
+let renderer;
+if (ok) { try { renderer = new THREE.WebGLRenderer({canvas: document.getElementById('c'), antialias: true, alpha: true}); } catch (e) { ok = false; } }
+if (!ok) { fb.style.display = 'grid'; }
+else {
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+
+scene.add(new THREE.HemisphereLight(0xfff4f6, 0x8a4a5e, 0.95));
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+const key = new THREE.DirectionalLight(0xffffff, 0.85); key.position.set(4, 7, 6); scene.add(key);
+const rim = new THREE.DirectionalLight(0xffc8d6, 0.55); rim.position.set(-6, 2, -5); scene.add(rim);
+
+const mat = (c, o) => new THREE.MeshStandardMaterial(Object.assign({color: c, roughness: 0.7, metalness: 0, side: THREE.DoubleSide}, o || {}));
+const UP = new THREE.Vector3(0, 1, 0);
+const GATHER = new THREE.Vector3(0, -2.6, 0);
+const bouquet = new THREE.Group();
+scene.add(bouquet);
+
+/* a petal is a curved slice of a sphere, facing +z */
+const petalGeo = (R, start, len, span) => new THREE.SphereGeometry(R, 14, 10, Math.PI / 2 - span / 2, span, start, len);
+
+function rose(hex, size) {
+  const g = new THREE.Group();
+  const base = new THREE.Color(hex);
+  const layers = 5;
+  for (let L = 0; L < layers; L++) {
+    const m = mat(base.clone().multiplyScalar(0.72 + L * 0.07));
+    const n = L === 0 ? 2 : 3 + L;
+    const R = 0.15 + L * 0.09;
+    const geo = petalGeo(R, Math.PI * (0.1 + L * 0.05), Math.PI * (0.75 - L * 0.03), Math.PI * (L === 0 ? 1.15 : 0.95));
+    const tilt = L < 2 ? 0 : (L - 1) * 0.24;
+    for (let i = 0; i < n; i++) {
+      const piv = new THREE.Group();
+      piv.rotation.y = (i / n) * Math.PI * 2 + L * 0.9;
+      const p = new THREE.Mesh(geo, m);
+      p.rotation.x = tilt;
+      p.scale.y = 1.25 - L * 0.06;
+      piv.add(p);
+      g.add(piv);
+    }
+  }
+  const sepal = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.3, 8), mat(0x3d7a40));
+  sepal.position.y = -0.5; sepal.rotation.x = Math.PI;
+  g.add(sepal);
+  g.scale.setScalar(size);
+  return g;
+}
+
+function orientAlong(obj, dir) { obj.quaternion.setFromUnitVectors(UP, dir.clone().normalize()); }
+const domeY = r => 1.65 - 0.2 * r * r;
+
+/* roses */
+const palette = [0xb3123a, 0xe2557a, 0xf6a6ba, 0xfff0ec, 0xc8264f, 0xf27f9d];
+const spots = [[0, 0, 1.3]];
+const ring = (n, r, off, s) => { for (let i = 0; i < n; i++) spots.push([r, (i / n) * Math.PI * 2 + off, s]); };
+ring(6, 0.95, 0.3, 1.25);
+ring(10, 1.75, 0, 1.15);
+const stemMat = mat(0x4c7a3a);
+spots.forEach(([r, a, s], i) => {
+  const pos = new THREE.Vector3(Math.cos(a) * r, domeY(r), Math.sin(a) * r);
+  const dir = pos.clone().sub(GATHER);
+  const f = rose(palette[(i * 7) % palette.length], s || 1.3);
+  f.position.copy(pos); orientAlong(f, dir);
+  bouquet.add(f);
+  const len = dir.length();
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, len, 6), stemMat);
+  stem.position.copy(GATHER.clone().add(dir.clone().multiplyScalar(0.5))); orientAlong(stem, dir);
+  bouquet.add(stem);
+});
+
+/* leaves around the edge */
+const leafGeo = new THREE.SphereGeometry(1, 12, 8);
+for (let i = 0; i < 12; i++) {
+  const a = (i / 12) * Math.PI * 2 + 0.15;
+  const r = 2.05;
+  const pos = new THREE.Vector3(Math.cos(a) * r, domeY(r) - 0.15, Math.sin(a) * r);
+  const leaf = new THREE.Mesh(leafGeo, mat(i % 2 ? 0x2f6b3a : 0x468f4f, {flatShading: true}));
+  leaf.scale.set(0.26, 0.75, 0.05);
+  const dir = pos.clone().sub(GATHER); dir.y *= 0.55;
+  leaf.position.copy(pos); orientAlong(leaf, dir);
+  leaf.rotateY(a);
+  bouquet.add(leaf);
+}
+
+/* baby's breath */
+const dotGeo = new THREE.SphereGeometry(0.045, 6, 5);
+const breath = new THREE.InstancedMesh(dotGeo, mat(0xffffff, {roughness: 0.9}), 320);
+const tmp = new THREE.Object3D();
+let k = 0;
+for (let s = 0; s < 32; s++) {
+  const a = Math.random() * Math.PI * 2, r = 0.45 + Math.random() * 1.6;
+  const cx = Math.cos(a) * r, cz = Math.sin(a) * r, cy = domeY(r) + 0.35 + Math.random() * 0.35;
+  for (let d = 0; d < 10 && k < 320; d++, k++) {
+    tmp.position.set(cx + (Math.random() - 0.5) * 0.35, cy + (Math.random() - 0.5) * 0.25, cz + (Math.random() - 0.5) * 0.35);
+    tmp.scale.setScalar(0.7 + Math.random() * 0.6);
+    tmp.updateMatrix(); breath.setMatrixAt(k, tmp.matrix);
+  }
+}
+bouquet.add(breath);
+
+/* paper wrapping with a crinkled top edge */
+function wrap(rTop, rBot, yTop, color, thetaLen, phase) {
+  const h = yTop - GATHER.y;
+  const geo = new THREE.CylinderGeometry(rTop, rBot, h, 48, 8, true, phase, thetaLen);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const t = (y + h / 2) / h, th = Math.atan2(z, x);
+    const w = 1 + 0.05 * Math.sin(th * 9 + phase) * t;
+    p.setXYZ(i, x * w, y + Math.sin(th * 7 + phase * 2) * 0.16 * t * t, z * w);
+  }
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, mat(color, {flatShading: true, roughness: 0.85}));
+  m.position.y = GATHER.y + h / 2;
+  return m;
+}
+bouquet.add(wrap(2.1, 0.3, -0.05, 0xf0b3c2, Math.PI * 2, 0));
+bouquet.add(wrap(2.45, 0.36, 0.3, 0xffffff, Math.PI * 1.55, 1.2));
+
+/* ribbon and bow */
+const ribbonMat = mat(0x8c0f30, {roughness: 0.4});
+const band = new THREE.Mesh(new THREE.TorusGeometry(0.64, 0.07, 8, 32), ribbonMat);
+band.rotation.x = Math.PI / 2; band.position.y = -2.2;
+bouquet.add(band);
+const front = new THREE.Vector3(Math.cos(1.2 + Math.PI * 0.775), 0, -Math.sin(1.2 + Math.PI * 0.775));
+const bow = new THREE.Group();
+[-1, 1].forEach(sgn => {
+  const loop = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.06, 8, 20), ribbonMat);
+  loop.scale.set(1.2, 0.7, 1); loop.position.x = sgn * 0.3; loop.rotation.z = sgn * 0.3;
+  bow.add(loop);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 0.03), ribbonMat);
+  tail.position.set(sgn * 0.18, -0.45, 0); tail.rotation.z = sgn * 0.3;
+  bow.add(tail);
+});
+bow.add(new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), ribbonMat));
+bow.position.copy(front.clone().multiplyScalar(0.72)); bow.position.y = -2.2;
+bow.lookAt(front.clone().multiplyScalar(5).setY(-2.2));
+bouquet.add(bow);
+
+/* stem ends below the wrap */
+for (let i = 0; i < 7; i++) {
+  const a = (i / 7) * Math.PI * 2;
+  const s = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5, 6), stemMat);
+  s.position.set(Math.cos(a) * 0.12, -3.3, Math.sin(a) * 0.12);
+  s.rotation.set(Math.sin(a) * 0.08, 0, Math.cos(a) * 0.08);
+  bouquet.add(s);
+}
+
+/* drifting petals */
+const drift = [];
+if (!reduce) {
+  const g = petalGeo(0.14, Math.PI * 0.25, Math.PI * 0.5, Math.PI * 0.8);
+  for (let i = 0; i < 36; i++) {
+    const m = new THREE.Mesh(g, mat(palette[i % palette.length]));
+    m.position.set((Math.random() - 0.5) * 12, Math.random() * 12 - 5, (Math.random() - 0.5) * 5 - 1);
+    m.userData = {v: 0.35 + Math.random() * 0.45, sway: Math.random() * 6, spin: (Math.random() - 0.5) * 2};
+    scene.add(m); drift.push(m);
+  }
+}
+
+/* camera fit */
+const target = new THREE.Vector3(0, -0.35, 0);
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const dist = Math.max(3.4 / t, 2.9 / (t * camera.aspect)) * 1.45;
+  camera.position.set(0, 1.6, dist);
+  camera.lookAt(target);
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* drag to spin */
+let dragging = false, lastX = 0, boost = 0;
+const cv = renderer.domElement;
+cv.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => { if (!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; bouquet.rotation.y += dx * 0.01; boost = dx * 0.6; });
+const end = () => { dragging = false; };
+cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+
+/* animate */
+const clock = new THREE.Clock();
+const easeOutBack = x => 1 + 2.2 * Math.pow(x - 1, 3) + 1.2 * Math.pow(x - 1, 2);
+bouquet.scale.setScalar(reduce ? 1 : 0.001);
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  if (!reduce) { const g = Math.min(t / 1.8, 1); bouquet.scale.setScalar(Math.max(0.001, easeOutBack(g))); }
+  if (!dragging) { bouquet.rotation.y += dt * ((reduce ? 0.15 : 0.55) + boost); boost *= 0.94; }
+  bouquet.position.y = reduce ? 0 : Math.sin(t * 1.1) * 0.08;
+  bouquet.rotation.z = reduce ? 0 : Math.sin(t * 0.7) * 0.03;
+  for (const m of drift) {
+    const u = m.userData;
+    m.position.y -= u.v * dt;
+    m.position.x += Math.sin(t + u.sway) * 0.004;
+    m.rotation.x += u.spin * dt; m.rotation.z += u.spin * 0.7 * dt;
+    if (m.position.y < -6) { m.position.y = 7; m.position.x = (Math.random() - 0.5) * 12; }
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+frame();
+}
+}
+</script>
+</body>
+</html>
